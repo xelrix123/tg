@@ -202,6 +202,126 @@ static double print_number(cairo_t *c, double x, double y, char *s)
 	return x;
 }
 
+static const char* get_beat_error_verdict(double be_ms)
+{
+         /* NOTE: If edits here -> update the tooltip to reflect the changes */
+	if (be_ms <= 0.5) return "excellent";
+	if (be_ms <= 1.0) return "good";
+	if (be_ms <= 2.0) return "acceptable";
+	if (be_ms <= 3.0) return "poor";
+	if (be_ms <= 5.0) return "bad";
+	return "severe";
+}
+
+static const char* get_rate_error_verdict(double rate_sd)
+{
+	double abs_rate = fabs(rate_sd);
+	if (abs_rate <= 5.0) return "excellent";
+	if (abs_rate <= 10.0) return "good";
+	if (abs_rate <= 20.0) return "acceptable";
+	if (abs_rate <= 30.0) return "marginal";
+	return "poor";
+}
+
+// Helper function to draw labels above values using same alignment as BEAT ERROR
+static void draw_value_label(cairo_t *c, const char* label, double value_x_start, const char* value_string, double y)
+{
+	cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Same font size as BEAT ERROR
+	
+	// Calculate where the value ends (simulate print_number behavior)
+	cairo_text_extents_t zero_extents;
+	cairo_set_font_size(c, OUTPUT_FONT);  // Use value font size
+	cairo_text_extents(c, "0", &zero_extents);
+	double char_width = zero_extents.x_advance;
+	int value_string_len = strlen(value_string);
+	double value_end_x = value_x_start + (char_width * value_string_len);
+	
+	// Right-align label to end at same point as value
+	cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Switch back to label font
+	cairo_text_extents_t label_extents;
+	cairo_text_extents(c, label, &label_extents);
+	double label_x = value_end_x - label_extents.width;
+	
+	cairo_set_source(c, white);
+	print_s(c, label_x, y - OUTPUT_FONT/2 - OUTPUT_FONT/2.5, (char*)label);
+}
+
+// Store label positions for tooltip detection
+static double amp_label_x_start = 0, amp_label_x_end = 0, amp_label_y_start = 0, amp_label_y_end = 0;
+static double be_label_x_start = 0, be_label_x_end = 0, be_label_y_start = 0, be_label_y_end = 0;
+static double rate_label_x_start = 0, rate_label_x_end = 0, rate_label_y_start = 0, rate_label_y_end = 0;
+static double bph_label_x_start = 0, bph_label_x_end = 0, bph_label_y_start = 0, bph_label_y_end = 0;
+
+static gboolean tooltip_query_event(GtkWidget *widget, gint x, gint y, gboolean keyboard_mode, 
+	GtkTooltip *tooltip, struct output_panel *op)
+{
+	UNUSED(widget);
+	UNUSED(keyboard_mode);
+	UNUSED(op);
+	
+	// Check if mouse is over the beat error label area
+	if (x >= be_label_x_start && x <= be_label_x_end && y >= be_label_y_start && y <= be_label_y_end) {
+		gtk_tooltip_set_text(tooltip,
+			"Beat error ranges:\n"
+			" 0.0-0.5 ms: Excellent\n"
+			" 0.5-1.0 ms: Good\n"
+			" 1.0-2.0 ms: Acceptable\n"
+			" 2.0-3.0 ms: Poor (likely affects accuracy)\n"
+			" 3.0-5.0 ms: Bad (noticeable impact on timekeeping)\n"
+			"      >5.0 ms: Severe\n\n"
+			"Beat error measures if the balance wheel swings equally "
+			"in both directions. 0.0ms means perfect symmetry between "
+			"the 'tick' and 'tock', while higher values indicate uneven "
+			"oscillation that affects accuracy.");
+		return TRUE;  // Show tooltip
+	}
+
+	
+	// Check if mouse is over the rate error label area  
+	if (x >= rate_label_x_start && x <= rate_label_x_end && y >= rate_label_y_start && y <= rate_label_y_end) {
+		gtk_tooltip_set_text(tooltip,
+			"Rate error ranges (seconds / day):\n"
+			" ±   0 -  5: Excellent (chronometer territory)\n"
+			" ±   5 - 10: Good (very accurate performance)\n"
+			" ± 10 - 20: Acceptable (solid daily performance)\n"
+			" ± 20 - 30: Marginal (still functional)\n"
+			" >30        : Poor (not normal)\n\n"
+			"Rate error measures how many seconds per day a watch gains (+) or loses (-). "
+	                "Primarily caused by the balance wheel oscillating faster or slower than its intended "
+			"frequency (bph).\n\n"
+			"NOTE #1: COSC chronometer standard requires -4/+6 s/d\n"
+			"NOTE #2: Many manufacturers spec. ±15-20 s/d as acceptable\n"
+			"NOTE:#3: Position variance matters; a watch might be +5 s/d dial up but +15 s/d crown down");
+		return TRUE;  // Show tooltip
+	}
+
+	
+	// Check if mouse is over the amplitude label area
+	if (x >= amp_label_x_start && x <= amp_label_x_end && y >= amp_label_y_start && y <= amp_label_y_end) {
+		gtk_tooltip_set_text(tooltip,
+			"Amplitude measures how far the balance wheel rotates in each swing, "
+			"expressed in degrees. It varies based on the watch's design, mainspring power, "
+			"and position - typically ranging from 250-310° when fully wound in horizontal "
+			"positions for modern watches. Lower amplitude (under 200° fully wound) may be "
+			"indicative of problems in the movement, while excessive amplitude (>330°) risks "
+			"'overbanking'. Vintage watches may run acceptably with lower amplitudes around "
+			"180-220° due to their design characteristics and age-related wear.");
+		return TRUE;  // Show tooltip
+	}
+	
+	// Check if mouse is over the beat rate label area
+	if (x >= bph_label_x_start && x <= bph_label_x_end && y >= bph_label_y_start && y <= bph_label_y_end) {
+		gtk_tooltip_set_text(tooltip,
+			"Beat rate is the frequency at which the balance wheel oscillates, measured in "
+			"beats per hour (BPH) or vibrations per hour (VPH). The beat rate shown is the "
+			"target BPH for the measured movement and any deviation from this frequency "
+			"(e.g., a 28,800 BPH watch running at 28,810 BPH) shows up as rate error (s/d).");
+		return TRUE;  // Show tooltip
+	}
+	
+	return FALSE;  // Don't show tooltip
+}
+
 static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_panel *op)
 {
 	UNUSED(widget);
@@ -295,16 +415,164 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 		strcpy(outputs[7]," bph");
 
 		int i;
+		double be_x_start = 0, be_x_end = 0;
+		double rate_x_start = 0, rate_x_end = 0, amp_x_start = 0, bph_x_start = 0;
 		for(i=0; i<8; i++) {
 			if(i%2) {
 				cairo_set_source(c, white);
 				cairo_set_font_size(c, OUTPUT_FONT*2/3);
 				x = print_s(c,x,y,outputs[i]);
+				if(i == 1) rate_x_end = x;   // End of "s/d" unit
+				if(i == 3) be_x_end = x;     // End of "ms" unit
 			} else {
 				cairo_set_source(c, i > 4 || !p || !old ? white : yellow);
 				cairo_set_font_size(c, OUTPUT_FONT);
+				if(i == 0) rate_x_start = x;  // Start of rate value
+				if(i == 2) be_x_start = x;    // Start of beat error value
+				if(i == 4) amp_x_start = x;   // Start of amplitude value
+				if(i == 6) bph_x_start = x;   // Start of BPH value
 				x = print_number(c,x,y,outputs[i]);
 			}
+		}
+		
+		// Add labels above all values
+		if(rate_x_start > 0) {
+			draw_value_label(c, "RATE ERROR", rate_x_start, outputs[0], y);
+			
+			// Store rate error label position for tooltip detection
+			cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Same font size as labels
+			cairo_text_extents_t zero_extents;
+			cairo_set_font_size(c, OUTPUT_FONT);  // Use value font size
+			cairo_text_extents(c, "0", &zero_extents);
+			double char_width = zero_extents.x_advance;
+			int rate_string_len = strlen(outputs[0]);
+			double rate_value_end_x = rate_x_start + (char_width * rate_string_len);
+			
+			cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Switch back to label font
+			cairo_text_extents_t rate_label_extents;
+			cairo_text_extents(c, "RATE ERROR", &rate_label_extents);
+			double rate_label_x = rate_value_end_x - rate_label_extents.width;
+			double rate_label_y = y - OUTPUT_FONT/2 - OUTPUT_FONT/2.5;
+			
+			rate_label_x_start = rate_label_x;
+			rate_label_x_end = rate_label_x + rate_label_extents.width;
+			rate_label_y_start = rate_label_y - rate_label_extents.height;
+			rate_label_y_end = rate_label_y;
+		}
+		if(be_x_start > 0) {
+			draw_value_label(c, "BEAT ERROR", be_x_start, outputs[2], y);
+			
+			// Store beat error label position for tooltip detection
+			cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Same font size as labels
+			cairo_text_extents_t zero_extents;
+			cairo_set_font_size(c, OUTPUT_FONT);  // Use value font size
+			cairo_text_extents(c, "0", &zero_extents);
+			double char_width = zero_extents.x_advance;
+			int be_string_len = strlen(outputs[2]);
+			double be_value_end_x = be_x_start + (char_width * be_string_len);
+			
+			cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Switch back to label font
+			cairo_text_extents_t be_label_extents;
+			cairo_text_extents(c, "BEAT ERROR", &be_label_extents);
+			double be_label_x = be_value_end_x - be_label_extents.width;
+			double be_label_y = y - OUTPUT_FONT/2 - OUTPUT_FONT/2.5;
+			
+			be_label_x_start = be_label_x;
+			be_label_x_end = be_label_x + be_label_extents.width;
+			be_label_y_start = be_label_y - be_label_extents.height;
+			be_label_y_end = be_label_y;
+		}
+		if(amp_x_start > 0) {
+			draw_value_label(c, "AMPLITUDE", amp_x_start, outputs[4], y);
+			
+			// Store amplitude label position for tooltip detection
+			cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Same font size as labels
+			cairo_text_extents_t zero_extents;
+			cairo_set_font_size(c, OUTPUT_FONT);  // Use value font size
+			cairo_text_extents(c, "0", &zero_extents);
+			double char_width = zero_extents.x_advance;
+			int amp_string_len = strlen(outputs[4]);
+			double amp_value_end_x = amp_x_start + (char_width * amp_string_len);
+			
+			cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Switch back to label font
+			cairo_text_extents_t amp_label_extents;
+			cairo_text_extents(c, "AMPLITUDE", &amp_label_extents);
+			double amp_label_x = amp_value_end_x - amp_label_extents.width;
+			double amp_label_y = y - OUTPUT_FONT/2 - OUTPUT_FONT/2.5;
+			
+			amp_label_x_start = amp_label_x;
+			amp_label_x_end = amp_label_x + amp_label_extents.width;
+			amp_label_y_start = amp_label_y - amp_label_extents.height;
+			amp_label_y_end = amp_label_y;
+		}
+		if(bph_x_start > 0) {
+			draw_value_label(c, "BEAT RATE", bph_x_start, outputs[6], y);
+			
+			// Store beat rate label position for tooltip detection
+			cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Same font size as labels
+			cairo_text_extents_t zero_extents;
+			cairo_set_font_size(c, OUTPUT_FONT);  // Use value font size
+			cairo_text_extents(c, "0", &zero_extents);
+			double char_width = zero_extents.x_advance;
+			int bph_string_len = strlen(outputs[6]);
+			double bph_value_end_x = bph_x_start + (char_width * bph_string_len);
+			
+			cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Switch back to label font
+			cairo_text_extents_t bph_label_extents;
+			cairo_text_extents(c, "BEAT RATE", &bph_label_extents);
+			double bph_label_x = bph_value_end_x - bph_label_extents.width;
+			double bph_label_y = y - OUTPUT_FONT/2 - OUTPUT_FONT/2.5;
+			
+			bph_label_x_start = bph_label_x;
+			bph_label_x_end = bph_label_x + bph_label_extents.width;
+			bph_label_y_start = bph_label_y - bph_label_extents.height;
+			bph_label_y_end = bph_label_y;
+		}
+		
+		// Add rate error verdict below the rate error value
+		if(rate_x_start > 0 && rate_x_end > 0) {
+			const char* rate_verdict;
+			bool signal_good = snst->signal >= (snst->calibrate ? NSTEPS : 1);
+			
+			if(!p || !signal_good) {
+				rate_verdict = "n/a";
+			} else {
+				rate_verdict = get_rate_error_verdict(snst->rate);
+			}
+			
+			cairo_set_source(c, white);
+			cairo_set_font_size(c, OUTPUT_FONT/4);
+			
+			// Add verdict below the rate error value
+			cairo_text_extents_t rate_extents;
+			cairo_text_extents(c, rate_verdict, &rate_extents);
+			double rate_verdict_x = rate_x_end - rate_extents.width;  // Right-align to "s/d" unit
+			double rate_verdict_y = y + OUTPUT_FONT/3 + 1;
+			print_s(c, rate_verdict_x, rate_verdict_y, (char*)rate_verdict);
+			
+		}
+		
+		// Add beat error verdict below the beat error value
+		if(be_x_start > 0 && be_x_end > 0) {
+			const char* verdict;
+			bool signal_good = snst->signal >= (snst->calibrate ? NSTEPS : 1);
+			
+			if(!p || !signal_good) {
+				verdict = "n/a";
+			} else {
+				verdict = get_beat_error_verdict(fabs(snst->be));
+			}
+			
+			cairo_set_source(c, white);
+			cairo_set_font_size(c, OUTPUT_FONT/4);
+			
+			// Add verdict below the beat error value
+			cairo_text_extents_t extents;
+			cairo_text_extents(c, verdict, &extents);
+			double verdict_x = be_x_end - extents.width;  // Right-align to "ms" unit
+			double verdict_y = y + OUTPUT_FONT/3 + 1;
+			print_s(c, verdict_x, verdict_y, (char*)verdict);
+			
 		}
 	}
 #ifdef DEBUG
@@ -1229,6 +1497,13 @@ struct output_panel *init_output_panel(struct computer *comp, struct snapshot *s
 	gtk_box_pack_start(GTK_BOX(op->panel),op->output_drawing_area, FALSE, TRUE, 0);
 	g_signal_connect (op->output_drawing_area, "draw", G_CALLBACK(output_draw_event), op);
 	gtk_widget_set_events(op->output_drawing_area, GDK_EXPOSURE_MASK);
+	
+	// Enable mouse motion events for targeted tooltip
+	gtk_widget_set_events(op->output_drawing_area, 
+		GDK_EXPOSURE_MASK | GDK_POINTER_MOTION_MASK);
+	gtk_widget_set_has_tooltip(op->output_drawing_area, TRUE);
+	g_signal_connect(op->output_drawing_area, "query-tooltip", 
+		G_CALLBACK(tooltip_query_event), op);
 
 	create_displays(op, vertical);
 
