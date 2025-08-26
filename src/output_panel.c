@@ -238,12 +238,14 @@ static void draw_value_label(cairo_t *c, const char* label, double value_x_start
 	
 	// Right-align label to end at same point as value
 	cairo_set_font_size(c, OUTPUT_FONT*2/9);  // Switch back to label font
+	cairo_select_font_face(c, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);  // Set bold font
 	cairo_text_extents_t label_extents;
 	cairo_text_extents(c, label, &label_extents);
 	double label_x = value_end_x - label_extents.width;
 	
 	cairo_set_source(c, white);
 	print_s(c, label_x, y - OUTPUT_FONT/2 - OUTPUT_FONT/2.5, (char*)label);
+	cairo_select_font_face(c, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);  // Reset to normal font
 }
 
 // Store label positions for tooltip detection
@@ -542,6 +544,7 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 			
 			cairo_set_source(c, white);
 			cairo_set_font_size(c, OUTPUT_FONT/4);
+			cairo_select_font_face(c, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);  // Set bold font
 			
 			// Add verdict below the rate error value
 			cairo_text_extents_t rate_extents;
@@ -549,6 +552,7 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 			double rate_verdict_x = rate_x_end - rate_extents.width;  // Right-align to "s/d" unit
 			double rate_verdict_y = y + OUTPUT_FONT/3 + 1;
 			print_s(c, rate_verdict_x, rate_verdict_y, (char*)rate_verdict);
+			cairo_select_font_face(c, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);  // Reset to normal font
 			
 		}
 		
@@ -565,6 +569,7 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 			
 			cairo_set_source(c, white);
 			cairo_set_font_size(c, OUTPUT_FONT/4);
+			cairo_select_font_face(c, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);  // Set bold font
 			
 			// Add verdict below the beat error value
 			cairo_text_extents_t extents;
@@ -572,6 +577,7 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 			double verdict_x = be_x_end - extents.width;  // Right-align to "ms" unit
 			double verdict_y = y + OUTPUT_FONT/3 + 1;
 			print_s(c, verdict_x, verdict_y, (char*)verdict);
+			cairo_select_font_face(c, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);  // Reset to normal font
 			
 		}
 	}
