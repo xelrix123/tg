@@ -264,13 +264,13 @@ static gboolean tooltip_query_event(GtkWidget *widget, gint x, gint y, gboolean 
 	// Check if mouse is over the beat error label area
 	if (x >= be_label_x_start && x <= be_label_x_end && y >= be_label_y_start && y <= be_label_y_end) {
 		gtk_tooltip_set_text(tooltip,
-			"Beat error ranges:\n"
-			" 0.0-0.5 ms: Excellent\n"
-			" 0.5-1.0 ms: Good\n"
-			" 1.0-2.0 ms: Acceptable\n"
-			" 2.0-3.0 ms: Poor (likely affects accuracy)\n"
-			" 3.0-5.0 ms: Bad (noticeable impact on timekeeping)\n"
-			"      >5.0 ms: Severe\n\n"
+			"Beat error (milliseconds / ms):\n"
+			" 0.0-0.5: Excellent\n"
+			" 0.5-1.0: Good\n"
+			" 1.0-2.0: Acceptable\n"
+			" 2.0-3.0: Poor (likely affects accuracy)\n"
+			" 3.0-5.0: Bad (noticeable impact on timekeeping)\n"
+			"     >5.0: Severe\n\n"
 			"Beat error measures if the balance wheel swings equally "
 			"in both directions. 0.0ms means perfect symmetry between "
 			"the 'tick' and 'tock', while higher values indicate uneven "
@@ -282,7 +282,7 @@ static gboolean tooltip_query_event(GtkWidget *widget, gint x, gint y, gboolean 
 	// Check if mouse is over the rate error label area  
 	if (x >= rate_label_x_start && x <= rate_label_x_end && y >= rate_label_y_start && y <= rate_label_y_end) {
 		gtk_tooltip_set_text(tooltip,
-			"Rate error ranges (seconds / day):\n"
+			"Rate error (seconds / day):\n"
 			" ±   0 -  5: Excellent (chronometer territory)\n"
 			" ±   5 - 10: Good (very accurate performance)\n"
 			" ± 10 - 20: Acceptable (solid daily performance)\n"
@@ -303,7 +303,7 @@ static gboolean tooltip_query_event(GtkWidget *widget, gint x, gint y, gboolean 
 		gtk_tooltip_set_text(tooltip,
 			"Amplitude measures how far the balance wheel rotates in each swing, "
 			"expressed in degrees. It varies based on the watch's design, mainspring power, "
-			"and position - typically ranging from 250-310° when fully wound in horizontal "
+			"and position typically ranging from 250-310° when fully wound in horizontal "
 			"positions for modern watches. Lower amplitude (under 200° fully wound) may be "
 			"indicative of problems in the movement, while excessive amplitude (>330°) risks "
 			"'overbanking'. Vintage watches may run acceptably with lower amplitudes around "
